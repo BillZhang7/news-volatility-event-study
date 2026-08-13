@@ -10,6 +10,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+st.set_page_config(page_title="News Vol Event Study", layout="wide")
+
 ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT / "outputs"
 
@@ -44,65 +46,61 @@ def load_outputs() -> dict:
     return {"curve": curve, "events": events, "summary": summary}
 
 
-try:
-    st.set_page_config(page_title="News Vol Event Study", layout="wide")
-    st.title("News Sentiment → Volatility Event Study")
-    st.caption(f"Data: {news_source_label()} | Plan B events | H-A3 hypothesis")
+st.title("News Sentiment → Volatility Event Study")
+st.caption(f"Data: {news_source_label()} | Plan B events | H-A3 hypothesis")
 
-    st.markdown(f"**Hypothesis ({HYPOTHESIS_ID}):** {HYPOTHESIS_TEXT}")
-    st.markdown(
-        f"**Event rule (Plan B):** daily sentiment below "
-        f"{SENTIMENT_STD_THRESHOLD}σ of the stock's own {SENTIMENT_LOOKBACK_DAYS}-day history."
-    )
+st.markdown(f"**Hypothesis ({HYPOTHESIS_ID}):** {HYPOTHESIS_TEXT}")
+st.markdown(
+    f"**Event rule (Plan B):** daily sentiment below "
+    f"{SENTIMENT_STD_THRESHOLD}σ of the stock's own {SENTIMENT_LOOKBACK_DAYS}-day history."
+)
 
-    missing = [p.name for p in [
+missing = [
+    p.name
+    for p in (
         OUTPUT / "vol_event_curve.csv",
         OUTPUT / "events.csv",
         OUTPUT / "event_study_summary.json",
-    ] if not p.exists()]
+    )
+    if not p.exists()
+]
+if missing:
+    st.error(f"Missing files in outputs/: {', '.join(missing)}")
+    st.stop()
 
-    if missing:
-        st.error(f"Missing files in outputs/: {', '.join(missing)}")
-        st.stop()
+data = load_outputs()
+summary = data["summary"]["full_sample"]
 
-    data = load_outputs()
-    summary = data["summary"]["full_sample"]
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Events", summary["event_count"])
+c2.metric("Pre vol", f"{summary['pre_vol_avg']:.4f}")
+c3.metric("Post vol (+5d)", f"{summary['post_vol_5d_avg']:.4f}")
+ratio = summary.get("post_to_pre_ratio_5d")
+c4.metric("Post/Pre ratio", f"{ratio:.2f}x" if ratio else "N/A")
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Events", summary["event_count"])
-    c2.metric("Pre vol", f"{summary['pre_vol_avg']:.4f}")
-    c3.metric("Post vol (+5d)", f"{summary['post_vol_5d_avg']:.4f}")
-    ratio = summary.get("post_to_pre_ratio_5d")
-    c4.metric("Post/Pre ratio", f"{ratio:.2f}x" if ratio else "N/A")
+st.subheader(f"Volatility around events [{-EVENT_WINDOW_PRE}, +{EVENT_WINDOW_POST}]")
+st.line_chart(data["curve"].set_index("day"))
 
-    st.subheader(f"Volatility around events [{-EVENT_WINDOW_PRE}, +{EVENT_WINDOW_POST}]")
-    chart = data["curve"].set_index("day")
-    st.line_chart(chart)
+png = OUTPUT / "vol_event_curve.png"
+if png.exists():
+    st.image(str(png), caption="Average volatility path around events")
 
-    png = OUTPUT / "vol_event_curve.png"
-    if png.exists():
-        st.image(str(png), caption="Average volatility path around events")
+st.subheader("Detected events")
+st.dataframe(
+    data["events"].sort_values("event_date", ascending=False),
+    use_container_width=True,
+)
 
-    st.subheader("Detected events")
-    st.dataframe(
-        data["events"].sort_values("event_date", ascending=False),
-        width="stretch",
+with st.expander("Research notes & limitations"):
+    st.markdown(
+        """
+        - **Data:** yfinance headlines (limited history, no API key)
+        - **Sentiment:** VADER / optional FinBERT locally
+        - **Events:** stock-specific negative sentiment shocks (Plan B)
+        - **H-A3:** tests volatility, not return direction
+        - Past patterns do not guarantee future results
+        """
     )
 
-    with st.expander("Research notes & limitations"):
-        st.markdown(
-            """
-            - **Data:** yfinance headlines (limited history, no API key)
-            - **Sentiment:** VADER / optional FinBERT locally
-            - **Events:** stock-specific negative sentiment shocks (Plan B)
-            - **H-A3:** tests volatility, not return direction
-            - Past patterns do not guarantee future results
-            """
-        )
-
-    st.markdown("---")
-    st.markdown("[GitHub Repository](https://github.com/BillZhang7/news-volatility-event-study)")
-
-except Exception as err:  # noqa: BLE001 - show full error in Streamlit Cloud logs/UI
-    st.error("App crashed while loading. Details below:")
-    st.exception(err)
+st.markdown("---")
+st.markdown("[GitHub Repository](https://github.com/BillZhang7/news-volatility-event-study)")
