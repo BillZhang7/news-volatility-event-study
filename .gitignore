@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.venv/
+venv/
+data/*.csv
+data/*.json
+outputs/.mpl/
+
+# Keep demo outputs for Streamlit Cloud & README charts
+!outputs/events.csv
+!outputs/vol_event_curve.csv
+!outputs/vol_event_curve.png
+!outputs/event_study_summary.json
